@@ -1,10 +1,10 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 /* Native PADS: Alg. 1 authentication plus Alg. 2 keyed-permutation deletion. */
 #include "AssuredDeletionPADSAuditStrategy/strategy.h"
+#include "AssuredDeletionPADSAuditStrategy/deletion_state_store.h"
 #include "ChordAuditMatrixLib/interfaces/audit/artifact_factory.h"
 #include "ChordAuditMatrixLib/interfaces/audit/messages/audit_data_map.h"
 #include "ChordAuditMatrixLib/interfaces/audit/messages/in_memory_tags.h"
-#include "DHTDynamicAuditStrategy/state_stores/dynamic_hash_table_state_store.h"
 #include <algorithm>
 #include <json/json.h>
 #include <map>
@@ -147,6 +147,9 @@ public:
           std::make_shared<PADSChallenges>());
     if (k == AuditArtifactKind::Proves)
       return std::static_pointer_cast<Proves>(std::make_shared<PADSProof>());
+    if (k == AuditArtifactKind::DynamicBlockMetadata)
+      return std::static_pointer_cast<BlockMetadata>(
+          std::make_shared<PADSDeletion::DeletionBlockMetadata>());
     throw std::runtime_error("PADS artifact unavailable");
   }
 };
@@ -159,8 +162,9 @@ AssuredDeletionPADSAuditStrategy::stateMaintenanceParty() const {
   return StateMaintenanceParty::Public;
 }
 std::shared_ptr<DynamicPdpStateStore>
-AssuredDeletionPADSAuditStrategy::createStateStore(BlockMetadataFactory) const {
-  return std::make_shared<DHTDynamic::DynamicHashTableStateStore>();
+AssuredDeletionPADSAuditStrategy::createStateStore(
+    BlockMetadataFactory factory) const {
+  return std::make_shared<PADSDeletion::DeletionStateStore>(std::move(factory));
 }
 void AssuredDeletionPADSAuditStrategy::setAlgorithm(
     CAMatrix::Crypto::CryptoGeneralAlgorithmPtr x) {
