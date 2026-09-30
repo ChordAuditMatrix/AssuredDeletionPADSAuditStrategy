@@ -10,6 +10,10 @@
 #*.dll
 *.dylib
 
+# Versioned plugin distribution artifact.
+!release/
+!release/*.dylib
+
 # CMake build artifacts
 build/
 build.nosync/
