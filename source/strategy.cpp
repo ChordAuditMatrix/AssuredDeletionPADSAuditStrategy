@@ -96,6 +96,7 @@ struct MaintExt final : StageExtBase {
   std::vector<std::size_t> indices;
   std::uint64_t key = 0;
   std::vector<std::uint8_t> seed;
+  bool deletionMode = false;
 };
 struct ChallengeExt final : StageExtBase {
   std::string fid;
@@ -215,7 +216,10 @@ AssuredDeletionPADSAuditStrategy::maintenance(const MaintainRequest &in) {
   MaintainResult r;
   auto e = std::dynamic_pointer_cast<MaintExt>(in.ext);
   auto it = files.find(e ? e->fid : "");
-  if (!e || in.type != MaintenanceOpType::Delete || it == files.end())
+  if (!e || !e->deletionMode ||
+      (in.type != MaintenanceOpType::Delete &&
+       in.type != MaintenanceOpType::Update) ||
+      it == files.end())
     return r;
   auto &f = it->second;
   if (e->indices.empty()) {
@@ -332,9 +336,26 @@ AuditRequestVariantPtr AssuredDeletionPADSAuditStrategy::createRequest(
   case AuditOperation::Maintenance: {
     auto x = in.requireJson(op);
     auto r = std::make_shared<MaintainRequest>();
-    r->type = MaintenanceOpType::Delete;
+    const auto requestedType = static_cast<MaintenanceOpType>(
+        x.get("opType", static_cast<unsigned>(MaintenanceOpType::Delete))
+            .asUInt());
+    if (requestedType != MaintenanceOpType::Delete &&
+        requestedType != MaintenanceOpType::Update) {
+      throw std::runtime_error(
+          "PADS deletion maintenance requires Delete or Update operation type");
+    }
     r->tags = ctx.generateTagsResult->tags;
     auto e = std::make_shared<MaintExt>();
+    // A standard CoreLib Update can carry the irreversible deletion
+    // transformation when the caller has no separate deletion endpoint.
+    // Require an explicit opt-in to keep ordinary updates distinct.
+    e->deletionMode = requestedType == MaintenanceOpType::Delete ||
+                      x.get("deletionMode", false).asBool();
+    if (!e->deletionMode) {
+      throw std::runtime_error(
+          "PADS Update maintenance requires deletionMode=true");
+    }
+    r->type = requestedType;
     e->fid = x.get("fileId", active).asString();
     e->indices = indices(x);
     e->key = x.get("permutationKey", 42).asUInt64();

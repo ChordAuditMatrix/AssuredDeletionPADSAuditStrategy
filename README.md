@@ -9,6 +9,27 @@ and audit artifacts use only CoreLib's generic interfaces.
 The distributed storage protocol and elapsed-time guarantee from the paper are
 outside the plugin boundary. The caller persists overwritten blocks and tags.
 
+## CoreLib lifecycle
+
+Use the standard `TagGen -> Maintenance(Update) -> Challenge -> Proof ->
+Verify` lifecycle in one `AuditEngine` process.  The Update request carries
+the deletion intent explicitly:
+
+```json
+{
+  "fileId": "object-001",
+  "opType": 0,
+  "deletionMode": true,
+  "targetBlockIndices": [3, 7, 11],
+  "permutationKey": 20260930,
+  "seed": "deletion-round-001"
+}
+```
+
+`opType: 0` is CoreLib's `MaintenanceOpType::Update`.  Explicit `Delete`
+requests remain supported.  An Update without `deletionMode: true` is rejected
+so that ordinary dynamic-data updates cannot be mistaken for deletion.
+
 ## Build and test
 
 ```sh
